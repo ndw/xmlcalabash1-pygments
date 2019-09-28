@@ -4,8 +4,8 @@
 
 <p:declare-step type="cx:pygments">
   <p:input port="source"/>
+  <p:input port="parameters" kind="parameter"/>
   <p:output port="result"/>
-  <p:option name="format" select="'html'"/>
   <p:option name="language" select="''"/>
   <p:option name="exec" select="'pygmentize'"/>
 </p:declare-step>

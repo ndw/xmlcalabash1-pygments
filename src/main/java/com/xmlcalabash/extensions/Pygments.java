@@ -38,6 +38,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Hashtable;
 import java.util.List;
 
 import static com.xmlcalabash.core.XProcConstants.c_result;
@@ -47,17 +48,19 @@ import static com.xmlcalabash.core.XProcConstants.c_result;
         type = "{http://xmlcalabash.com/ns/extensions}pygments")
 
 public class Pygments extends DefaultStep implements ProcessMatchingNodes {
-    private static final QName _format = new QName("format");
     private static final QName _language = new QName("language");
     private static final QName _exec = new QName("exec");
+    private static final String ns_html = "http://www.w3.org/1999/xhtml";
+    private static final QName h_span = new QName("", ns_html, "span");
     private String exec = "pygmentize";
     private String pygmentize = null;
     private List<String> cmdline = new ArrayList<String>();
 
+    private Hashtable<QName,String> params = new Hashtable<QName, String> ();
     private ProcessMatch matcher = null;
     private ReadablePipe source = null;
     private WritablePipe result = null;
-    private String format = "html";
+    private String format = "html";      // No other formats are supported
     private String language = null;
 
     private static final String library_xpl = "http://xmlcalabash.com/extension/steps/pygments.xpl";
@@ -75,6 +78,10 @@ public class Pygments extends DefaultStep implements ProcessMatchingNodes {
         result = pipe;
     }
 
+    public void setParameter(QName name, RuntimeValue value) {
+        params.put(name, value.getString());
+    }
+
     public void reset() {
         source.resetReader();
         result.resetWriter();
@@ -83,7 +90,6 @@ public class Pygments extends DefaultStep implements ProcessMatchingNodes {
     public void run() throws SaxonApiException {
         super.run();
 
-        format = getOption(_format).getString();
         if (getOption(_language) != null) {
             language = getOption(_language).getString();
         }
@@ -101,6 +107,13 @@ public class Pygments extends DefaultStep implements ProcessMatchingNodes {
         if (language != null) {
             cmdline.add("-l");
             cmdline.add(language);
+        }
+
+        for (QName key : params.keySet()) {
+            if ("".equals(key.getNamespaceURI())) {
+                cmdline.add("-P");
+                cmdline.add(key.getLocalName() + "=" + params.get(key));
+            }
         }
 
         XdmNode doc = source.read();
@@ -142,7 +155,7 @@ public class Pygments extends DefaultStep implements ProcessMatchingNodes {
                 addHtmlNamespace(tree, cnode);
             }
         } else if (node.getNodeKind() == XdmNodeKind.ELEMENT) {
-            QName newName = new QName("", "http://www.w3.org/1999/xhtml", node.getNodeName().getLocalName());
+            QName newName = new QName("", ns_html, node.getNodeName().getLocalName());
             tree.addStartElement(newName);
             tree.addAttributes(node);
 
@@ -197,23 +210,66 @@ public class Pygments extends DefaultStep implements ProcessMatchingNodes {
                 throw XProcException.stepError(64);
             }
 
-            // Find the div; there has to be one...
+            // Pygmnents doesn't put the elements in a namespace, *sigh*
+            TreeWriter newTree = new TreeWriter(runtime);
+            newTree.startDocument(node.getBaseURI());
+            addHtmlNamespace(newTree, outResult);
+            newTree.endDocument();
+            outResult = S9apiUtils.getDocumentElement(newTree.getResult());
+
+            // The outResult is now a <result> element containing the markup that Pygments
+            // produced. Step one, get rid of the <result> wrapper.
+
+            // Find the child element; there has to be one...
             XdmNode div = null;
             for (XdmNode cnode : new AxisNodes(outResult, Axis.CHILD, AxisNodes.SIGNIFICANT)) {
-                if (div == null && cnode.getNodeKind() == XdmNodeKind.ELEMENT) {
+                if (cnode.getNodeKind() == XdmNodeKind.ELEMENT) {
                     div = cnode;
+                    break;
                 }
             }
 
-            if ("html".equals(format)) {
-                TreeWriter newTree = new TreeWriter(runtime);
-                newTree.startDocument(node.getBaseURI());
-                addHtmlNamespace(newTree, div);
-                newTree.endDocument();
-                div = newTree.getResult();
+            // Pygments usually returns a div containing a pre. That's not ideal in cases
+            // where markup from XML is being styled. (The pre is probably already provided
+            // by the surrounding markup and it means that you can't run Pygments over
+            // inline code samples. If the markup returned by Pygments consisted of a div
+            // containing a pre; drop the div and the pre. (If some other markup was returned,
+            // it's because the user specified options that created a table or something;
+            // just return all that unchanged.)
+
+            // Find the pre; if there is one
+            XdmNode pre = null;
+            if (div != null && "div".equals(div.getNodeName().getLocalName())) {
+                for (XdmNode cnode : new AxisNodes(div, Axis.CHILD, AxisNodes.SIGNIFICANT)) {
+                    if (cnode.getNodeKind() == XdmNodeKind.ELEMENT) {
+                        if ("pre".equals(cnode.getNodeName().getLocalName())) {
+                            pre = cnode;
+                        }
+                        break;
+                    }
+                }
             }
 
-            matcher.addSubtree(div);
+            newTree = new TreeWriter(runtime);
+            newTree.startDocument(node.getBaseURI());
+
+            if (pre == null) {
+                // Some option (e.g., linenos) resulted in different wrapper markup...
+                newTree.addSubtree(div);
+            } else {
+                newTree.addStartElement(h_span);
+                newTree.addAttributes(div);
+                newTree.startContent();
+                for (XdmNode cnode : new AxisNodes(pre, Axis.CHILD, AxisNodes.ALL)) {
+                    newTree.addSubtree(cnode);
+                }
+                newTree.addEndElement();
+            }
+
+            newTree.endDocument();
+            outResult = newTree.getResult();
+
+            matcher.addSubtree(outResult);
         } catch (IOException ioe) {
             throw new XProcException(ioe);
         }

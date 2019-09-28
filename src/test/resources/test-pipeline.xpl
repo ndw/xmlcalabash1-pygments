@@ -4,6 +4,7 @@
                 xmlns:cx="http://xmlcalabash.com/ns/extensions"
                 xmlns:sr="http://www.w3.org/2005/sparql-results#"
                 exclude-inline-prefixes="c cx sr">
+<p:input port="parameters" kind="parameter"/>
 <p:output port="result"/>
 <p:serialization port="result" indent="true"/>
 
@@ -24,7 +25,7 @@ public class Pygments extends DefaultStep implements ProcessMatchingNodes {
 </cx:pygments>
 
 <p:choose>
-  <p:when xmlns:h="http://www.w3.org/1999/xhtml" test="//h:div[@class='highlight']">
+  <p:when xmlns:h="http://www.w3.org/1999/xhtml" test="//h:span[@class='highlight']">
     <p:identity>
       <p:input port="source">
         <p:inline><c:result>PASS</c:result></p:inline>
