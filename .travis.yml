@@ -1,0 +1,14 @@
+language: java
+script: "./gradlew dist"
+install:
+- echo sonatypeUsername=none >> gradle.properties
+- echo sonatypePassword=none >> gradle.properties
+deploy:
+  skip_cleanup: true
+  provider: releases
+  api_key:
+    secure: j77OqQiN3GvSBVgEAydcfh/kcLMKTUuYAIVUGmeISkpg3Gkmndo0Yw+/767Awz2siLdvetjc+7osHKFGHxBIEIGPQN98SK0wf4m823tZ09zZVCGaDi920BRwXFFPRbbu3BOm8DPw6xCPXLjoPglzPMrRVOgb8Ugh0NWuBe3gWWIihz2bilKzyslx5+mVbNZWoTBFr9rfqzOOM2/47Tf6f1pltXa1kHN74Qlk4txQeERe5s1v/t6mW8REaNgRXVYFP64U2kf1s6H+5dNh+DmrUX/8kNSTTZcqOrxWC2eYxy+DkPCCKVotOD5RrVyCG9N/7u+jA0WCAOWaE76Wjec6m7BYnvJZBB9A1adZrHz9iwAPfrq6rkYa2qaoitTz5zPv6qlNSQYC1Ip4RVJHj3mab1y8ZIU+Wjc/7JXcE2iLU6htSchtI4pJi0bApbyD2G01EbN0v7BH805miIpSQT17vg43CvV3zKU83l/UX+MNf26FXt2F3ipvjJWe7HpMuzW0QYyAQeHHvp8ESpfje92HTN3OgC/xqW7SCNmXUfFioGlv7E8083BHJWeP4zvuhZN3LExBfmuwi20sq78pjk/oxEeEMk5q8Y8Wf/yazFabIlF1YeQ02reKrrGrlbF8g2xHSEq0iWZv5xLaq4DSbwDntPVJbWU1+wiD/D6GrJH+Lug=
+  file: build/distributions/xmlcalabash1-pygments-$TRAVIS_TAG.zip
+  on:
+    tags: true
+    all_branches: true
