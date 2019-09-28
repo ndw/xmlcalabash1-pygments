@@ -1,8 +1,18 @@
-language: java
-script: "./gradlew dist"
+language: python
+
+python:
+  - 3.7
+
+script:
+  - "./gradlew dist"
+
+before_install:
+  - pip install pygments
+
 install:
-- echo sonatypeUsername=none >> gradle.properties
-- echo sonatypePassword=none >> gradle.properties
+  - echo sonatypeUsername=none >> gradle.properties
+  - echo sonatypePassword=none >> gradle.properties
+
 deploy:
   skip_cleanup: true
   provider: releases
