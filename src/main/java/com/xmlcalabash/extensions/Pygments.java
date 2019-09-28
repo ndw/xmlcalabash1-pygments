@@ -116,6 +116,13 @@ public class Pygments extends DefaultStep implements ProcessMatchingNodes {
             }
         }
 
+        StringBuilder sb = new StringBuilder();
+        for (String s : cmdline) {
+            sb.append(s);
+            sb.append(" ");
+        }
+        logger.trace("Pygments cmd: " + sb.toString());
+
         XdmNode doc = source.read();
         RuntimeValue matchExpr = new RuntimeValue("text()", doc);
 
@@ -172,6 +179,7 @@ public class Pygments extends DefaultStep implements ProcessMatchingNodes {
 
     @Override
     public void processText(XdmNode node) throws SaxonApiException {
+        logger.trace("Pygments text: [[" + node.getStringValue() + "]]");
         try {
             ProcessBuilder builder = new ProcessBuilder(cmdline);
             Process process = builder.start();
@@ -229,6 +237,9 @@ public class Pygments extends DefaultStep implements ProcessMatchingNodes {
                 }
             }
 
+            // This doesn't have the right serialization options by default
+            logger.trace("Pygments markup: " + div);
+
             // Pygments usually returns a div containing a pre. That's not ideal in cases
             // where markup from XML is being styled. (The pre is probably already provided
             // by the surrounding markup and it means that you can't run Pygments over
@@ -260,9 +271,46 @@ public class Pygments extends DefaultStep implements ProcessMatchingNodes {
                 newTree.addStartElement(h_span);
                 newTree.addAttributes(div);
                 newTree.startContent();
+
+                // The pre begins with a newline and ends with a newline, we don't want those either.
+                // But we do want any other whitespace characters that might be in those initial
+                // and final text nodes.
+                boolean first = true;
+                XdmNode lastOneSeen = null;
                 for (XdmNode cnode : new AxisNodes(pre, Axis.CHILD, AxisNodes.ALL)) {
-                    newTree.addSubtree(cnode);
+                    if (lastOneSeen != null) {
+                        if (first) {
+                            if (lastOneSeen.getNodeKind() == XdmNodeKind.TEXT) {
+                                String text = lastOneSeen.getStringValue();
+                                if (text.startsWith("\n")) {
+                                    newTree.addText(text.substring(1));
+                                } else {
+                                    newTree.addText(text);
+                                }
+                            } else {
+                                newTree.addSubtree(lastOneSeen);
+                            }
+                        } else {
+                            newTree.addSubtree(lastOneSeen);
+                        }
+                        first = false;
+                    }
+                    lastOneSeen = cnode;
                 }
+
+                if (lastOneSeen != null) {
+                    if (lastOneSeen.getNodeKind() == XdmNodeKind.TEXT) {
+                        String text = lastOneSeen.getStringValue();
+                        if (text.endsWith("\n")) {
+                            newTree.addText(text.substring(0, text.length() - 1));
+                        } else {
+                            newTree.addText(text);
+                        }
+                    } else {
+                        newTree.addSubtree(lastOneSeen);
+                    }
+                }
+
                 newTree.addEndElement();
             }
 
