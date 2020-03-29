@@ -5,13 +5,13 @@ buildscript {
 
   dependencies {
     classpath group: 'net.sf.saxon', name: 'Saxon-HE', version: saxonVersion
-    classpath group: 'biz.aQute.bnd', name: 'biz.aQute.bnd.gradle', version: '4.2.0'
+    classpath group: 'biz.aQute.bnd', name: 'biz.aQute.bnd.gradle', version: '5.0.1'
   }
 }
 
 plugins {
   id "java"
-  id "maven"
+  id "maven-publish"
   id "signing"
 }
 
@@ -33,9 +33,9 @@ def sPatch   = saxonVersionMatcher[0][4]
 
 project.ext.saxonRelease = sMajor + "." + sMinor + "." + sRelease
 project.ext.saxonBranch  = sMajor + sMinor
-project.ext.releaseVersion = version
-project.ext.distVersion = version + snapshot
-version = project.ext.distVersion // - gets turned into . in some contexts
+project.ext.releaseVersion = relVersion
+project.ext.distVersion = relVersion + snapshot
+relVersion = project.ext.distVersion // - gets turned into . in some contexts
 
 repositories {
   mavenCentral()
@@ -59,15 +59,16 @@ configurations.all {
 }
 
 dependencies {
-  compileOnly (
+  implementation (
     [group: 'com.nwalsh', name: 'nwalsh-annotations', version: '1.0.1'],
+    [group: 'com.xmlcalabash', name: 'xmlcalabash', version: xmlCalabashVersion],
   )
-  annotationProcessor (
-    [group: 'com.nwalsh', name: 'nwalsh-annotations', version: '1.0.1'],
-  )
-  compile (
-    [group: 'com.xmlcalabash', name: 'xmlcalabash', version: "1.1.27-" + saxonBranch],
-  )
+}
+
+compileJava {
+  options.deprecation = true
+  options.compilerArgs += ['-Xlint:deprecation']
+  options.annotationProcessorPath = configurations.compileClasspath
 }
 
 task copyLib(type: Copy) {
@@ -83,6 +84,7 @@ task copyLib(type: Copy) {
 }
 
 jar {
+  archiveBaseName = "xmlcalabash1-pygments-" + relVersion
   bnd ('Bundle-Vendor': 'Norman Walsh',
        'Bundle-Description': 'XML Calabash 1.x Pygments step',
        'Bundle-Name': 'xmlcalabash1-pygments',
@@ -131,7 +133,7 @@ task copyJavaDoc(dependsOn: javadoc, type: Copy) {
 }
 
 task testStep(type: JavaExec) {
-  classpath = configurations.copydep + configurations.runtime + sourceSets.main.output
+  classpath = configurations.copydep + configurations.runtimeClasspath + sourceSets.main.output
 
   main = 'com.xmlcalabash.drivers.Main'
   maxHeapSize = "1024m"
@@ -140,72 +142,70 @@ task testStep(type: JavaExec) {
 
 task makeDist(dependsOn: [ build, copyJar, copyLib ]) {
   doLast {
-    println "Created distribution in build/dist"
+    println("Created distribution in build/dist")
   }
 }
 
 task zipDist(dependsOn: makeDist, type: Zip) {
   from('build/dist')
   into 'xmlcalabash1-pygments-' + distVersion
-  archiveName 'xmlcalabash1-pygments-' + distVersion + ".zip"
+  archiveFileName = 'xmlcalabash1-pygments-' + distVersion + ".zip"
 }
 
 task dist(dependsOn: [testStep, zipDist]) {
   // nop
 }
 
-artifacts {
-  archives javadocJar
-  archives sourcesJar
-}
-
 signing {
-  required { gradle.taskGraph.hasTask("uploadArchives") }
-  sign configurations.archives
+  sign publishing.publications
 }
 
-uploadArchives {
-  repositories {
-    mavenDeployer {
-      configuration = configurations.deployerJars
-
-      beforeDeployment { MavenDeployment deployment ->
-        signing.signPom(deployment) }
-
-      repository(url: "https://oss.sonatype.org/service/local/staging/deploy/maven2/") {
-        authentication(userName: sonatypeUsername, password: sonatypePassword)
-      }
-
-      snapshotRepository(url: "https://oss.sonatype.org/content/repositories/snapshots/") {
-        authentication(userName: sonatypeUsername, password: sonatypePassword)
-      }
-
-      pom.project {
-        name 'XML Calabash Pygments step'
-        packaging 'jar'
-        description 'XML Calabash extension step send pygments'
-        url 'https://github.com/ndw/xmlcalabash1-pygments'
+publishing {
+  publications {
+    mavenJava(MavenPublication) {
+      pom {
+        name = 'XML Calabash Pygments step'
+        packaging = 'jar'
+        description = 'XML Calabash extension step send pygments'
+        url = 'https://github.com/ndw/xmlcalabash1-pygments'
 
         scm {
-          url 'scm:git@github.com:ndw/xmlcalabash1-pygments.git'
-          connection 'scm:git@github.com:ndw/xmlcalabash1-pygments.git'
-          developerConnection 'scm:git@github.com:ndw/xmlcalabash1-pygments.git'
+          url = 'scm:git@github.com:ndw/xmlcalabash1-pygments.git'
+          connection = 'scm:git@github.com:ndw/xmlcalabash1-pygments.git'
+          developerConnection = 'scm:git@github.com:ndw/xmlcalabash1-pygments.git'
         }
 
         licenses {
           license {
-            name 'The Apache Software License, Version 2.0'
-            url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
-            distribution 'repo'
+            name = 'The Apache Software License, Version 2.0'
+            url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+            distribution = 'repo'
           }
         }
 
         developers {
           developer {
-            id 'ndw'
-            name 'Norman Walsh'
+            id = 'ndw'
+            name = 'Norman Walsh'
           }
         }
+      }
+
+      groupId = "com.xmlcalabash"
+      artifactId = "xmlcalabash1-pygments"
+      version = relVersion
+      from components.java
+      artifact javadocJar
+      artifact sourcesJar
+    }
+  }
+
+  repositories {
+    maven {
+      url = "https://oss.sonatype.org/service/local/staging/deploy/maven2/"
+      credentials {
+        username = sonatypeUsername
+        password = sonatypePassword
       }
     }
   }
